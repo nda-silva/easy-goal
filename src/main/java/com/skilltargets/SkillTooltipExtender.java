@@ -250,45 +250,74 @@ class SkillTooltipExtender
 		}
 
 		// The text columns are sized relative to the tooltip; the difference is the padding around them.
+		// Both laid-out widths come from the same (possibly previous) layout, so the difference holds,
+		// but compare against the width the game just set rather than the laid-out one.
 		int inset = tooltip.getWidth() - Math.min(labels.getWidth(), values.getWidth());
-		return Math.max(0, Math.min(needed + inset - tooltip.getWidth(), MAX_WIDTH_GROWTH));
+		return Math.max(0, Math.min(needed + inset - tooltip.getOriginalWidth(), MAX_WIDTH_GROWTH));
 	}
 
 	/**
-	 * The game places the tooltip for its original size. After growing it, if it now runs past
-	 * the right or bottom of the visible area (the skills tab, which on the right column sits
-	 * against the RuneLite sidebar), align that edge flush with the area's edge.
+	 * The game places the tooltip for its original size, and depending on where the mouse enters it
+	 * can end up partly outside the skills tab, where it gets cut off. Keep it inside the visible area
+	 * (the canvas and every container it sits in): the right and bottom edges flush with that area's
+	 * edges if they'd overflow, and never past its left or top edge.
 	 * Returns true if it was moved.
 	 */
 	private boolean keepOnScreen(Widget tooltip)
 	{
 		Widget parent = tooltip.getParent();
-		Rectangle area = new Rectangle(0, 0, client.getCanvasWidth(), client.getCanvasHeight());
-		if (parent != null)
+		if (parent == null
+			|| tooltip.getXPositionMode() != WidgetPositionMode.ABSOLUTE_LEFT
+			|| tooltip.getYPositionMode() != WidgetPositionMode.ABSOLUTE_TOP
+			|| tooltip.getWidthMode() != WidgetSizeMode.ABSOLUTE
+			|| tooltip.getHeightMode() != WidgetSizeMode.ABSOLUTE)
 		{
-			area = area.intersection(parent.getBounds());
+			return false;
 		}
-		Rectangle box = tooltip.getBounds();
+
+		Rectangle area = new Rectangle(0, 0, client.getCanvasWidth(), client.getCanvasHeight());
+		for (Widget container = parent; container != null; container = container.getParent())
+		{
+			area = area.intersection(container.getBounds());
+		}
+
+		// Work out where the box is from its position settings rather than getBounds(): the laid-out
+		// position only catches up a frame later, and reading the old one makes the tooltip jump twice.
+		Point origin = parent.getCanvasLocation();
+		if (origin == null)
+		{
+			return false;
+		}
+		Rectangle box = new Rectangle(origin.getX() + tooltip.getOriginalX(), origin.getY() + tooltip.getOriginalY(),
+			tooltip.getOriginalWidth(), tooltip.getOriginalHeight());
 		if (area.isEmpty() || box.isEmpty())
 		{
 			return false;
 		}
 
-		boolean moved = false;
-		int overflowX = (box.x + box.width) - (area.x + area.width);
-		if (overflowX > 0 && tooltip.getXPositionMode() == WidgetPositionMode.ABSOLUTE_LEFT)
+		int dx = shiftInto(box.x, box.width, area.x, area.width);
+		int dy = shiftInto(box.y, box.height, area.y, area.height);
+		if (dx == 0 && dy == 0)
 		{
-			// Right edge at 0 from the area's right, but never past its left edge.
-			tooltip.setOriginalX(tooltip.getOriginalX() - Math.min(overflowX, box.x - area.x));
-			moved = true;
+			return false;
 		}
-		int overflowY = (box.y + box.height) - (area.y + area.height);
-		if (overflowY > 0 && tooltip.getYPositionMode() == WidgetPositionMode.ABSOLUTE_TOP)
+		tooltip.setOriginalX(tooltip.getOriginalX() + dx);
+		tooltip.setOriginalY(tooltip.getOriginalY() + dy);
+		return true;
+	}
+
+	/**
+	 * How far to move a span so it fits inside the area: back from the far edge first, then
+	 * forward from the near edge, so the near edge wins when the span is bigger than the area.
+	 */
+	private static int shiftInto(int start, int size, int areaStart, int areaSize)
+	{
+		int shift = Math.min(0, (areaStart + areaSize) - (start + size));
+		if (start + shift < areaStart)
 		{
-			tooltip.setOriginalY(tooltip.getOriginalY() - Math.min(overflowY, box.y - area.y));
-			moved = true;
+			shift = areaStart - start;
 		}
-		return moved;
+		return shift;
 	}
 
 	private Skill hoveredSkill()
