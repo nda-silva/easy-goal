@@ -1,4 +1,4 @@
-# Skill Targets
+# Easy Goal
 
 RS3-style skill targets for RuneLite. Right-click any skill in the skills tab:
 

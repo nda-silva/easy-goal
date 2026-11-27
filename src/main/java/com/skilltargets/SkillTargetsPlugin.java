@@ -38,7 +38,7 @@ import net.runelite.client.util.Text;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Skill Targets",
+	name = "Easy Goal",
 	description = "Right-click a skill to set an RS3-style level or XP target",
 	tags = {"skill", "target", "goal", "xp", "level", "progress", "rs3"}
 )
