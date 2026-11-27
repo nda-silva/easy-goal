@@ -62,6 +62,16 @@ class SkillTooltipExtender
 	private int appliedWidth = UNSET;
 	private int appliedHeight = UNSET;
 	private String appliedValueSuffix;
+	/**
+	 * Where the tooltip was left last frame, and for which skill and mouse position. The game moves
+	 * the tooltip when it refreshes it (e.g. on every XP drop), picking a side of the mouse based on
+	 * the tooltip's width; while the mouse stays still it's put back so it doesn't jump around.
+	 */
+	private Skill placedSkill;
+	private int placedMouseX;
+	private int placedMouseY;
+	private int placedX = UNSET;
+	private int placedY = UNSET;
 
 	@Inject
 	SkillTooltipExtender(Client client)
@@ -81,6 +91,9 @@ class SkillTooltipExtender
 		appliedWidth = UNSET;
 		appliedHeight = UNSET;
 		appliedValueSuffix = null;
+		placedSkill = null;
+		placedX = UNSET;
+		placedY = UNSET;
 	}
 
 	/**
@@ -165,8 +178,6 @@ class SkillTooltipExtender
 		labelLines.add("XP to target:");
 		valueLines.add(SkillTargetsPlugin.formatNumber(Math.max(0, targetXp - xp)));
 
-		boolean changed = false;
-
 		// Text: strip what was added last time (if the game hasn't rewritten it) and add fresh lines.
 		String labelSuffix = "<br>" + String.join("<br>", labelLines);
 		String valueSuffix = "<br>" + String.join("<br>", valueLines);
@@ -180,12 +191,10 @@ class SkillTooltipExtender
 		if (!labelText.equals(labelBase + labelSuffix))
 		{
 			labels.setText(labelBase + labelSuffix);
-			changed = true;
 		}
 		if (!valueText.equals(valueBase + valueSuffix))
 		{
 			values.setText(valueBase + valueSuffix);
-			changed = true;
 		}
 		appliedValueSuffix = valueSuffix;
 
@@ -195,7 +204,6 @@ class SkillTooltipExtender
 			int lineHeight = labels.getLineHeight() > 0 ? labels.getLineHeight() : FALLBACK_LINE_HEIGHT;
 			appliedHeight = tooltip.getOriginalHeight() + labelLines.size() * lineHeight + BAR_ROW_HEIGHT;
 			tooltip.setOriginalHeight(appliedHeight);
-			changed = true;
 		}
 
 		// Width: same, widening from the game's value only as much as the added rows need.
@@ -206,19 +214,26 @@ class SkillTooltipExtender
 			if (appliedWidth != base)
 			{
 				tooltip.setOriginalWidth(appliedWidth);
-				changed = true;
 			}
 		}
 
-		if (changed)
+		// Same skill and the mouse hasn't moved: keep the tooltip where it was.
+		Point mouse = client.getMouseCanvasPosition();
+		if (skill == placedSkill && mouse.getX() == placedMouseX && mouse.getY() == placedMouseY && placedX != UNSET)
 		{
-			revalidate(tooltip, parts);
+			tooltip.setOriginalX(placedX);
+			tooltip.setOriginalY(placedY);
 		}
-		// The game may also move the tooltip at any time, so check the edges every frame.
-		if (keepOnScreen(tooltip))
-		{
-			revalidate(tooltip, parts);
-		}
+		keepOnScreen(tooltip);
+		placedSkill = skill;
+		placedMouseX = mouse.getX();
+		placedMouseY = mouse.getY();
+		placedX = tooltip.getOriginalX();
+		placedY = tooltip.getOriginalY();
+
+		// Lay out the tooltip and all its pieces every frame. When the game moves the tooltip, its
+		// background pieces otherwise follow a frame late, cutting off part of the box.
+		revalidate(tooltip, parts);
 	}
 
 	private static void revalidate(Widget tooltip, List<Widget> parts)
