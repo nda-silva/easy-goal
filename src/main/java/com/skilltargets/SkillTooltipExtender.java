@@ -52,6 +52,12 @@ class SkillTooltipExtender
 	private Skill extendedSkill;
 	@Getter
 	private SkillTarget extendedTarget;
+	/**
+	 * Where the extended tooltip box is on screen this frame. Worked out from the values just set, so
+	 * unlike the widgets' laid-out bounds it doesn't lag a frame behind when the game moves the tooltip.
+	 */
+	@Getter
+	private Rectangle extendedBounds;
 
 	/**
 	 * What this class last applied to the tooltip. The game can reset the tooltip's size or text on
@@ -84,6 +90,7 @@ class SkillTooltipExtender
 		extendedText = null;
 		extendedSkill = null;
 		extendedTarget = null;
+		extendedBounds = null;
 	}
 
 	private void forget()
@@ -152,6 +159,7 @@ class SkillTooltipExtender
 		extendedText = labels;
 		extendedSkill = skill;
 		extendedTarget = target;
+		extendedBounds = boxOnCanvas(tooltip);
 	}
 
 	private void apply(Widget tooltip, List<Widget> parts, Widget labels, Widget values, Skill skill, SkillTarget target)
@@ -278,7 +286,33 @@ class SkillTooltipExtender
 	 * edges if they'd overflow, and never past its left or top edge.
 	 * Returns true if it was moved.
 	 */
-	private boolean keepOnScreen(Widget tooltip)
+	private void keepOnScreen(Widget tooltip)
+	{
+		Rectangle box = boxOnCanvas(tooltip);
+		if (box == null)
+		{
+			return;
+		}
+
+		Rectangle area = new Rectangle(0, 0, client.getCanvasWidth(), client.getCanvasHeight());
+		for (Widget container = tooltip.getParent(); container != null; container = container.getParent())
+		{
+			area = area.intersection(container.getBounds());
+		}
+		if (area.isEmpty())
+		{
+			return;
+		}
+
+		tooltip.setOriginalX(tooltip.getOriginalX() + shiftInto(box.x, box.width, area.x, area.width));
+		tooltip.setOriginalY(tooltip.getOriginalY() + shiftInto(box.y, box.height, area.y, area.height));
+	}
+
+	/**
+	 * Where the tooltip box is on screen, worked out from its position and size settings rather than
+	 * getBounds(): the laid-out bounds only catch up a frame later. Null if it can't be worked out.
+	 */
+	private static Rectangle boxOnCanvas(Widget tooltip)
 	{
 		Widget parent = tooltip.getParent();
 		if (parent == null
@@ -287,38 +321,16 @@ class SkillTooltipExtender
 			|| tooltip.getWidthMode() != WidgetSizeMode.ABSOLUTE
 			|| tooltip.getHeightMode() != WidgetSizeMode.ABSOLUTE)
 		{
-			return false;
+			return null;
 		}
-
-		Rectangle area = new Rectangle(0, 0, client.getCanvasWidth(), client.getCanvasHeight());
-		for (Widget container = parent; container != null; container = container.getParent())
-		{
-			area = area.intersection(container.getBounds());
-		}
-
-		// Work out where the box is from its position settings rather than getBounds(): the laid-out
-		// position only catches up a frame later, and reading the old one makes the tooltip jump twice.
 		Point origin = parent.getCanvasLocation();
 		if (origin == null)
 		{
-			return false;
+			return null;
 		}
 		Rectangle box = new Rectangle(origin.getX() + tooltip.getOriginalX(), origin.getY() + tooltip.getOriginalY(),
 			tooltip.getOriginalWidth(), tooltip.getOriginalHeight());
-		if (area.isEmpty() || box.isEmpty())
-		{
-			return false;
-		}
-
-		int dx = shiftInto(box.x, box.width, area.x, area.width);
-		int dy = shiftInto(box.y, box.height, area.y, area.height);
-		if (dx == 0 && dy == 0)
-		{
-			return false;
-		}
-		tooltip.setOriginalX(tooltip.getOriginalX() + dx);
-		tooltip.setOriginalY(tooltip.getOriginalY() + dy);
-		return true;
+		return box.isEmpty() ? null : box;
 	}
 
 	/**

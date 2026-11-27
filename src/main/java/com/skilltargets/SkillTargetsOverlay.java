@@ -63,7 +63,11 @@ class SkillTargetsOverlay extends Overlay
 			// Overlays draw above all widgets, including the game's skill tooltip. Clip the tooltip's
 			// area out so the icons look like they're underneath it.
 			Shape previousClip = graphics.getClip();
-			Rectangle tooltip = visibleTooltipBounds();
+			Rectangle tooltip = tooltipExtender.getExtendedBounds();
+			if (tooltip == null)
+			{
+				tooltip = visibleTooltipBounds();
+			}
 			if (tooltip != null)
 			{
 				Area clip = new Area(previousClip != null ? previousClip
@@ -90,8 +94,9 @@ class SkillTargetsOverlay extends Overlay
 	}
 
 	/**
-	 * The area covered by the game's skill tooltip, or null when it isn't showing. The tooltip
-	 * component itself is an empty container, so this is the union of its visible pieces.
+	 * The area covered by the game's skill tooltip when it hasn't been extended, or null when it
+	 * isn't showing: the union of its visible pieces. The tooltip box itself is left out, because the
+	 * game can leave it in place (not hidden) for a while after the tooltip disappears.
 	 */
 	private Rectangle visibleTooltipBounds()
 	{
@@ -156,8 +161,12 @@ class SkillTargetsOverlay extends Overlay
 			return;
 		}
 
-		Widget box = text.getParent();
-		Rectangle boxBounds = box != null ? box.getBounds() : text.getBounds();
+		Rectangle boxBounds = tooltipExtender.getExtendedBounds();
+		if (boxBounds == null)
+		{
+			Widget box = text.getParent();
+			boxBounds = box != null ? box.getBounds() : text.getBounds();
+		}
 
 		double progress = target.getProgress(client.getSkillExperience(tooltipExtender.getExtendedSkill()));
 		String percent = (int) Math.floor(progress * 100) + "%";
